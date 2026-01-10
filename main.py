@@ -13,7 +13,8 @@ drag_piece = None
 drag_from = None
 drag_x = drag_y = 0
 
-selected_square = None
+WHITE_MODE = "human"
+BLACK_MODE = "human"
 
 PIECE_LIBRARY = [
     chess.Piece(chess.QUEEN, chess.WHITE),
@@ -31,10 +32,59 @@ PIECE_LIBRARY = [
 ]
 
 root = tk.Tk()
-root.title("Chess Sandbox")
+root.title("Chess Sandbox + Bot")
 
 canvas = tk.Canvas(root, width=8*SQUARE_SIZE+200, height=8*SQUARE_SIZE+40)
-canvas.pack()
+canvas.grid(row=0, column=0, rowspan=20)
+
+panel = tk.Frame(root)
+panel.grid(row=0, column=1, padx=10)
+
+def evaluate(board):
+    values = {chess.PAWN:1, chess.KNIGHT:3, chess.BISHOP:3, chess.ROOK:5, chess.QUEEN:9, chess.KING:0}
+    score = 0
+    for p in values:
+        score += len(board.pieces(p, chess.WHITE))*values[p]
+        score -= len(board.pieces(p, chess.BLACK))*values[p]
+    return score
+
+def minimax(board, depth, alpha, beta, maximizing):
+    if depth==0 or board.is_game_over():
+        return evaluate(board)
+    if maximizing:
+        value = -9999
+        for move in board.legal_moves:
+            board.push(move)
+            value = max(value, minimax(board, depth-1, alpha, beta, False))
+            board.pop()
+            alpha = max(alpha, value)
+            if beta <= alpha:
+                break
+        return value
+    else:
+        value = 9999
+        for move in board.legal_moves:
+            board.push(move)
+            value = min(value, minimax(board, depth-1, alpha, beta, True))
+            board.pop()
+            beta = min(beta, value)
+            if beta <= alpha:
+                break
+        return value
+
+def get_bot_move(level):
+    depth = 5 if level=="perfect" else 3
+    best_move = None
+    best_val = -9999 if board.turn else 9999
+    for move in board.legal_moves:
+        board.push(move)
+        val = minimax(board, depth-1, -10000, 10000, board.turn)
+        board.pop()
+        if board.turn and val>best_val:
+            best_val, best_move = val, move
+        if not board.turn and val<best_val:
+            best_val, best_move = val, move
+    return best_move
 
 def draw():
     canvas.delete("all")
@@ -58,24 +108,25 @@ def draw():
             canvas.create_text(c*SQUARE_SIZE+80, r*SQUARE_SIZE+40, text=p.unicode_symbol(), font=("Arial", 40))
     canvas.create_text(8*SQUARE_SIZE+120, 20, text="PIECE LIBRARY")
     for i,p in enumerate(PIECE_LIBRARY):
-        canvas.create_text(8*SQUARE_SIZE+120, 60 + i*35, text=p.unicode_symbol(), font=("Arial", 30), tags=f"lib_{i}")
+        canvas.create_text(8*SQUARE_SIZE+120, 60+i*35, text=p.unicode_symbol(), font=("Arial",30), tags=f"lib_{i}")
     if drag_piece:
-        canvas.create_text(drag_x, drag_y, text=drag_piece.unicode_symbol(), font=("Arial", 40))
+        canvas.create_text(drag_x, drag_y, text=drag_piece.unicode_symbol(), font=("Arial",40))
     canvas.create_text(8*SQUARE_SIZE+120, 8*SQUARE_SIZE-20, text="EDIT MODE" if edit_mode else "PLAY MODE", fill="red" if edit_mode else "green")
+    root.after(200, check_bot_turn)
 
 def on_down(e):
     global drag_piece, drag_from, drag_x, drag_y
     drag_x, drag_y = e.x, e.y
     for i,p in enumerate(PIECE_LIBRARY):
-        if abs(e.x-(8*SQUARE_SIZE+120)) < 20 and abs(e.y-(60+i*35)) < 20:
+        if abs(e.x-(8*SQUARE_SIZE+120))<20 and abs(e.y-(60+i*35))<20:
             drag_piece = p
             drag_from = None
             draw()
             return
     c = (e.x-40)//SQUARE_SIZE
-    r = 7 - (e.y//SQUARE_SIZE)
-    if 0 <= c <= 7 and 0 <= r <= 7:
-        sq = chess.square(c, r)
+    r = 7-(e.y//SQUARE_SIZE)
+    if 0<=c<=7 and 0<=r<=7:
+        sq = chess.square(c,r)
         p = board.piece_at(sq)
         if p:
             drag_piece = p
@@ -94,9 +145,9 @@ def on_up(e):
     if not drag_piece:
         return
     c = (e.x-40)//SQUARE_SIZE
-    r = 7 - (e.y//SQUARE_SIZE)
-    if 0 <= c <= 7 and 0 <= r <= 7:
-        sq = chess.square(c, r)
+    r = 7-(e.y//SQUARE_SIZE)
+    if 0<=c<=7 and 0<=r<=7:
+        sq = chess.square(c,r)
         board.set_piece_at(sq, drag_piece)
     else:
         if drag_from is not None:
@@ -118,9 +169,35 @@ def reset_board():
     board.reset()
     draw()
 
-tk.Button(root, text="Toggle Edit Mode", command=toggle_edit).pack()
-tk.Button(root, text="Reset Board", command=reset_board).pack()
-tk.Button(root, text="Clear Board", command=clear_board).pack()
+def set_white(mode):
+    global WHITE_MODE
+    WHITE_MODE = mode
+
+def set_black(mode):
+    global BLACK_MODE
+    BLACK_MODE = mode
+
+def check_bot_turn():
+    if board.is_game_over():
+        return
+    mode = WHITE_MODE if board.turn else BLACK_MODE
+    if mode in ("great","perfect"):
+        move = get_bot_move(mode)
+        if move:
+            board.push(move)
+            draw()
+
+tk.Button(panel, text="Toggle Edit Mode", command=toggle_edit).pack(fill="x")
+tk.Button(panel, text="Reset Board", command=reset_board).pack(fill="x")
+tk.Button(panel, text="Clear Board", command=clear_board).pack(fill="x")
+tk.Label(panel, text="WHITE BOT").pack(pady=5)
+tk.Button(panel, text="Human", command=lambda:set_white("human")).pack(fill="x")
+tk.Button(panel, text="Great", command=lambda:set_white("great")).pack(fill="x")
+tk.Button(panel, text="Perfect", command=lambda:set_white("perfect")).pack(fill="x")
+tk.Label(panel, text="BLACK BOT").pack(pady=5)
+tk.Button(panel, text="Human", command=lambda:set_black("human")).pack(fill="x")
+tk.Button(panel, text="Great", command=lambda:set_black("great")).pack(fill="x")
+tk.Button(panel, text="Perfect", command=lambda:set_black("perfect")).pack(fill="x")
 
 canvas.bind("<ButtonPress-1>", on_down)
 canvas.bind("<B1-Motion>", on_move)
