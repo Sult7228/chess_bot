@@ -4,10 +4,10 @@ import tkinter as tk
 SQUARE_SIZE = 80
 BOARD_COLOR_1 = "#F0D9B5"
 BOARD_COLOR_2 = "#B58863"
-HIGHLIGHT = "#FFD54F"
 
 board = chess.Board()
 edit_mode = False
+flip = False
 
 drag_piece = None
 drag_from = None
@@ -32,7 +32,7 @@ PIECE_LIBRARY = [
 ]
 
 root = tk.Tk()
-root.title("Chess Sandbox + Bot")
+root.title("Chess Sandbox + Bot + Flip")
 
 canvas = tk.Canvas(root, width=8*SQUARE_SIZE+200, height=8*SQUARE_SIZE+40)
 canvas.grid(row=0, column=0, rowspan=20)
@@ -96,16 +96,31 @@ def draw():
             x2 = x1 + SQUARE_SIZE
             y2 = y1 + SQUARE_SIZE
             canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
-    for i,f in enumerate("abcdefgh"):
-        canvas.create_text(i*SQUARE_SIZE+80, 8*SQUARE_SIZE+20, text=f)
+    files = "abcdefgh"
+    ranks = "12345678"
+    for i,f in enumerate(files):
+        x = i*SQUARE_SIZE+80
+        y = 8*SQUARE_SIZE+20
+        if flip:
+            canvas.create_text(7-i*SQUARE_SIZE//SQUARE_SIZE*0+80, y, text=files[7-i])
+        else:
+            canvas.create_text(x, y, text=f)
     for i in range(8):
-        canvas.create_text(20, i*SQUARE_SIZE+40, text=str(8-i))
+        x = 20
+        y = i*SQUARE_SIZE+40
+        if flip:
+            canvas.create_text(x, y, text=str(i+1))
+        else:
+            canvas.create_text(x, y, text=str(8-i))
     for sq in chess.SQUARES:
         p = board.piece_at(sq)
         if p and sq != drag_from:
             c = chess.square_file(sq)
-            r = 7 - chess.square_rank(sq)
-            canvas.create_text(c*SQUARE_SIZE+80, r*SQUARE_SIZE+40, text=p.unicode_symbol(), font=("Arial", 40))
+            r = chess.square_rank(sq)
+            if flip:
+                c = 7 - c
+                r = 7 - r
+            canvas.create_text(c*SQUARE_SIZE+80, (7-r)*SQUARE_SIZE+40, text=p.unicode_symbol(), font=("Arial", 40))
     canvas.create_text(8*SQUARE_SIZE+120, 20, text="PIECE LIBRARY")
     for i,p in enumerate(PIECE_LIBRARY):
         canvas.create_text(8*SQUARE_SIZE+120, 60+i*35, text=p.unicode_symbol(), font=("Arial",30), tags=f"lib_{i}")
@@ -125,6 +140,9 @@ def on_down(e):
             return
     c = (e.x-40)//SQUARE_SIZE
     r = 7-(e.y//SQUARE_SIZE)
+    if flip:
+        c = 7 - c
+        r = 7 - r
     if 0<=c<=7 and 0<=r<=7:
         sq = chess.square(c,r)
         p = board.piece_at(sq)
@@ -146,6 +164,9 @@ def on_up(e):
         return
     c = (e.x-40)//SQUARE_SIZE
     r = 7-(e.y//SQUARE_SIZE)
+    if flip:
+        c = 7 - c
+        r = 7 - r
     if 0<=c<=7 and 0<=r<=7:
         sq = chess.square(c,r)
         board.set_piece_at(sq, drag_piece)
@@ -169,6 +190,11 @@ def reset_board():
     board.reset()
     draw()
 
+def flip_board():
+    global flip
+    flip = not flip
+    draw()
+
 def set_white(mode):
     global WHITE_MODE
     WHITE_MODE = mode
@@ -190,6 +216,7 @@ def check_bot_turn():
 tk.Button(panel, text="Toggle Edit Mode", command=toggle_edit).pack(fill="x")
 tk.Button(panel, text="Reset Board", command=reset_board).pack(fill="x")
 tk.Button(panel, text="Clear Board", command=clear_board).pack(fill="x")
+tk.Button(panel, text="Flip Board", command=flip_board).pack(fill="x")
 tk.Label(panel, text="WHITE BOT").pack(pady=5)
 tk.Button(panel, text="Human", command=lambda:set_white("human")).pack(fill="x")
 tk.Button(panel, text="Great", command=lambda:set_white("great")).pack(fill="x")
