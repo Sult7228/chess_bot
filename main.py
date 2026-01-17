@@ -1,5 +1,7 @@
 import chess
+import chess.engine
 import tkinter as tk
+import threading
 
 SQUARE_SIZE = 80
 BOARD_COLOR_1 = "#F0D9B5"
@@ -40,6 +42,9 @@ canvas.grid(row=0, column=0, rowspan=20)
 panel = tk.Frame(root)
 panel.grid(row=0, column=1, padx=10)
 
+ENGINE_PATH = r"C:\Users\PROGRAMMING\Desktop\stockfish\stockfish-windows.exe"
+engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
+
 def evaluate(board):
     values = {chess.PAWN:1, chess.KNIGHT:3, chess.BISHOP:3, chess.ROOK:5, chess.QUEEN:9, chess.KING:0}
     score = 0
@@ -73,18 +78,22 @@ def minimax(board, depth, alpha, beta, maximizing):
         return value
 
 def get_bot_move(level):
-    depth = 5 if level=="perfect" else 3
-    best_move = None
-    best_val = -9999 if board.turn else 9999
-    for move in board.legal_moves:
-        board.push(move)
-        val = minimax(board, depth-1, -10000, 10000, board.turn)
-        board.pop()
-        if board.turn and val>best_val:
-            best_val, best_move = val, move
-        if not board.turn and val<best_val:
-            best_val, best_move = val, move
-    return best_move
+    if level=="great":
+        depth = 3
+        best_move = None
+        best_val = -9999 if board.turn else 9999
+        for move in board.legal_moves:
+            board.push(move)
+            val = minimax(board, depth-1, -10000, 10000, board.turn)
+            board.pop()
+            if board.turn and val>best_val:
+                best_val, best_move = val, move
+            if not board.turn and val<best_val:
+                best_val, best_move = val, move
+        return best_move
+    elif level=="perfect":
+        result = engine.play(board, chess.engine.Limit(time=0.5))
+        return result.move
 
 def draw():
     canvas.delete("all")
@@ -97,12 +106,11 @@ def draw():
             y2 = y1 + SQUARE_SIZE
             canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
     files = "abcdefgh"
-    ranks = "12345678"
     for i,f in enumerate(files):
         x = i*SQUARE_SIZE+80
         y = 8*SQUARE_SIZE+20
         if flip:
-            canvas.create_text(7-i*SQUARE_SIZE//SQUARE_SIZE*0+80, y, text=files[7-i])
+            canvas.create_text(7-i+80, y, text=files[7-i])
         else:
             canvas.create_text(x, y, text=f)
     for i in range(8):
@@ -203,15 +211,18 @@ def set_black(mode):
     global BLACK_MODE
     BLACK_MODE = mode
 
+def bot_move_thread(mode):
+    move = get_bot_move(mode)
+    if move:
+        board.push(move)
+        draw()
+
 def check_bot_turn():
     if board.is_game_over():
         return
     mode = WHITE_MODE if board.turn else BLACK_MODE
     if mode in ("great","perfect"):
-        move = get_bot_move(mode)
-        if move:
-            board.push(move)
-            draw()
+        threading.Thread(target=bot_move_thread, args=(mode,), daemon=True).start()
 
 tk.Button(panel, text="Toggle Edit Mode", command=toggle_edit).pack(fill="x")
 tk.Button(panel, text="Reset Board", command=reset_board).pack(fill="x")
@@ -229,6 +240,12 @@ tk.Button(panel, text="Perfect", command=lambda:set_black("perfect")).pack(fill=
 canvas.bind("<ButtonPress-1>", on_down)
 canvas.bind("<B1-Motion>", on_move)
 canvas.bind("<ButtonRelease-1>", on_up)
+
+def on_close():
+    engine.quit()
+    root.destroy()
+
+root.protocol("WM_DELETE_WINDOW", on_close)
 
 draw()
 root.mainloop()
